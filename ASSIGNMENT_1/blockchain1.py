@@ -15,21 +15,10 @@ import requests
 from uuid import uuid4
 import random
 from urllib.parse import urlparse
-import rsa  
 import pandas as pd
 import binascii
 import ecdsa
-import numpy as np
 
-class NpEncoder(json.JSONEncoder):
-    def default(self, obj):
-        if isinstance(obj, np.integer):
-            return int(obj)
-        if isinstance(obj, np.floating):
-            return float(obj)
-        if isinstance(obj, np.ndarray):
-            return obj.tolist()
-        return super(NpEncoder, self).default(obj)
 class Blockchain:
 
     def __init__(self):
@@ -77,6 +66,21 @@ class Blockchain:
         block_index = 1
         while block_index < len(chain):
             block = chain[block_index]
+            trans = block['transactions_hash']
+            if len(trans) != 0:
+                df = pd.read_csv('transactions.csv')
+                s = []
+                for i in trans:
+                    for j in range(df.shape[0]):
+                        if str(i) == str(hashlib.sha256((str(df.iloc[j]['sender'])+str(df.iloc[j]['receiver'])+str(df.iloc[j]['amount'])).encode()).hexdigest()):
+                            #print(d1.iloc[0]['hash_public'])
+                            verifying_key = binascii.unhexlify(str.encode(df.iloc[j]['public_key']))
+                            pb = ecdsa.VerifyingKey.from_string(verifying_key, curve=ecdsa.SECP256k1)
+                            #print(binascii.unhexlify(str.encode(d2.iloc[i]['sign'])),binascii.unhexlify(str.encode(d2.iloc[i]['message'])))
+                            if pb.verify(binascii.unhexlify(str.encode(df.iloc[j]['sign'])),binascii.unhexlify(str.encode(df.iloc[j]['message']))):
+                                s.append(str("For Transaction hash " + str(i) + " - Signature verified"))
+                            else:
+                                s.append(str("For Transaction hash " + str(i) + " - Signature not verified"))
             if block['previous_hash'] != self.hash(previous_block):
                 return False
             previous_proof = int(previous_block['proof'])
@@ -183,8 +187,8 @@ class Blockchain:
 # Creating a Web App
 app = Flask(__name__)
 host_name = "0.0.0.0"
-localhost = "http://172.31.50.86"
-port_number = 5001
+localhost = "http://192.168.29.19"
+port_number = 5002
 
 # Creating an address for the node on Port 5001
 node_address = str(uuid4()).replace('-', '')
@@ -221,7 +225,7 @@ def mine_block():
     response = {'message': 'Congratulations, you just mined a block!',
                 'transactions' : []
                 }
-    blockchain.update_utxo()
+    #blockchain.update_utxo()
     for i in range(len(blockchain.transactions)):
         r = {}
         r['sender'] = str(blockchain.transactions[i]['sender'])
@@ -273,19 +277,20 @@ def add_transactions():
     print(node)
     df = pd.read_csv('transactions.csv')
     s = []
-    for i in range(df.shape[0]):
-        for j in range(len(node)):
-            if df.iloc[i]['sender'] == node[j][2]:
-                #print(d1.iloc[0]['hash_public'])
-                verifying_key = binascii.unhexlify(str.encode(node[j][1]))
-                pb = ecdsa.VerifyingKey.from_string(verifying_key, curve=ecdsa.SECP256k1)
-                #print(binascii.unhexlify(str.encode(d2.iloc[i]['sign'])),binascii.unhexlify(str.encode(d2.iloc[i]['message'])))
-                if pb.verify(binascii.unhexlify(str.encode(df.iloc[i]['sign'])),binascii.unhexlify(str.encode(df.iloc[i]['message']))):
-                    s.append(str("For Transaction ID " + str(i+1) + " - Signature verified"))
-                    h = hashlib.sha256((str(df.iloc[i]['sender'])+str(df.iloc[i]['receiver'])+str(df.iloc[i]['amount'])).encode()).hexdigest()
-                    blockchain.add_transaction(df.iloc[i]['sender'],df.iloc[i]['receiver'],df.iloc[i]['amount'],h)
-                else:
-                    s.append(str("For Transaction ID " + str(i+1) + " - Signature not verified"))
+    while len(s) < 2: 
+        for i in range(df.shape[0]):
+            for j in range(len(node)):
+                if df.iloc[i]['sender'] == node[j][2]:
+                    #print(d1.iloc[0]['hash_public'])
+                    verifying_key = binascii.unhexlify(str.encode(node[j][1]))
+                    pb = ecdsa.VerifyingKey.from_string(verifying_key, curve=ecdsa.SECP256k1)
+                    #print(binascii.unhexlify(str.encode(d2.iloc[i]['sign'])),binascii.unhexlify(str.encode(d2.iloc[i]['message'])))
+                    if pb.verify(binascii.unhexlify(str.encode(df.iloc[i]['sign'])),binascii.unhexlify(str.encode(df.iloc[i]['message']))):
+                        s.append(str("For Transaction ID " + str(i+1) + " - Signature verified"))
+                        h = hashlib.sha256((str(df.iloc[i]['sender'])+str(df.iloc[i]['receiver'])+str(df.iloc[i]['amount'])).encode()).hexdigest()
+                        blockchain.add_transaction(df.iloc[i]['sender'],df.iloc[i]['receiver'],df.iloc[i]['amount'],h)
+                    else:
+                        s.append(str("For Transaction ID " + str(i+1) + " - Signature not verified"))
     l = len(s)
     response = {'message': f'Number of transaction verified tranactions added to Block after digital signature matching are {l}',
                 'responses': s}    
@@ -337,15 +342,15 @@ def connect_node():
     if m_nodes is None:
         return "No Minor node", 400
     for node in m_nodes:
-        if int(node[20:24]) != port_number:
+        if int(node[21:25]) != port_number:
             print(node)
             blockchain.add_node(node,'miner')
     if u_nodes is None or len(u_nodes) < 2:
         return "No User nodes available", 400
-    n = random.randint(2,10)
+    n = random.randint(2,len(u_nodes))
     for i in range(n):
         x = random.randint(0,len(u_nodes)-1)
-        if int(u_nodes[x][20:24]) != port_number and u_nodes[x] not in blockchain.nodes['user']:
+        if int(u_nodes[x][21:25]) != port_number and u_nodes[x] not in blockchain.nodes['user']:
             blockchain.add_node(u_nodes[x],'user')
     response = {'message': 'All the nodes are now connected. The Blockchain now contains the following nodes:',
                 'total_nodes': blockchain.nodes}

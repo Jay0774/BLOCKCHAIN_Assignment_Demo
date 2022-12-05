@@ -1,27 +1,18 @@
 # -*- coding: utf-8 -*-
 """
-Created on Fri Sep 30 19:22:42 2022
+Created on Fri Sep 16 17:56:23 2022
 
 @author: jayga
 """
 
 
 # Importing the libraries
-import datetime
+
 import hashlib
-import json
 from flask import Flask, jsonify, request
-import requests
 from uuid import uuid4
-import random
-from urllib.parse import urlparse
 import pandas as pd
-from cryptography.hazmat.primitives.asymmetric import ec
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives import hashes
-from cryptography import exceptions
 import binascii
-from cryptography.hazmat.primitives.serialization import load_pem_public_key
 import ecdsa
 
 class User:
@@ -59,6 +50,7 @@ class User:
         self.transactions['message'] = bytes.decode(binascii.hexlify(message))
         self.transactions['sign'] = bytes.decode(binascii.hexlify(signature))
         self.transactions['public_key'] = self.pb
+        self.transactions['completed'] = 0
         #print(type(signature),type(self.e_pb))
         return self.transactions
 
@@ -80,8 +72,8 @@ class User:
 # Creating a Web App
 app = Flask(__name__)
 host_name = "0.0.0.0"
-localhost = "http://192.168.29.19"
-port_number = 5011
+localhost = "http://172.31.46.191"
+port_number = 5016
 
 # Creating user object
 u = User()
@@ -122,5 +114,9 @@ def get_pair():
                 'private_key': epk }
     return jsonify(response), 200
 
+# accessing the blockchain
+@app.route('/get_blockchain', methods = ['GET'])
+def get_blockchain():
+    pass
 # Running the app
 app.run(host = host_name, port = port_number)

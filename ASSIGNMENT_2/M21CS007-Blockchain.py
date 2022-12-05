@@ -25,7 +25,7 @@ class Blockchain:
         self.chain = []
         self.transactions = []
         self.transactions_hash = []
-        self.create_block(proof = 1, previous_hash = '0')
+        #self.create_block(proof = 1, previous_hash = '0')
         self.nodes = {'miner': [], 'user' : []}
         self.utxo = []
         self.utxo_hash = []
@@ -44,7 +44,10 @@ class Blockchain:
         return block 
 
     def get_previous_block(self):
-        return self.chain[-1]
+        if len(self.chain)>0:
+            return self.chain[-1]
+        else:
+            return 0
 
     def proof_of_work(self, previous_proof):
         new_proof = 1
@@ -98,7 +101,10 @@ class Blockchain:
                                   'amount': amount})
         previous_block = self.get_previous_block()
         self.transactions_hash.append(t_hash)
-        return int(previous_block['index']) + 1
+        if previous_block==0:
+            return 1
+        else:
+            return int(previous_block['index']) + 1
     
     def add_node(self, address,type_of_node):
         parsed_url = urlparse(address)
@@ -117,12 +123,24 @@ class Blockchain:
                     max_length = length
                     longest_chain = chain
         if longest_chain:
+            rem = self.chain
+            for i in range (len(rem)):
+                b_hash = blockchain.hash(chain[i])
+                df = pd.read_csv("block_data.csv")
+                d_index = df[df['block_hash'] == b_hash].index 
+                df.drop(d_index , inplace=True)
+                df.to_csv('block_data.csv',index=False)
+                df = pd.read_csv("block_transactions_data.csv")
+                d_index = df[df['block_hash'] == b_hash].index 
+                df.drop(d_index , inplace=True)
+                df.to_csv('block_transactions_data.csv',index=False)
             self.chain = longest_chain
             return True
         return False
     
     def create_merkle_root(self):
-        l = len(self.transactions) 
+        l = len(self.transactions)
+        count = 10
         if  l == 0:
             return ""
         else:
@@ -131,7 +149,7 @@ class Blockchain:
                 t1 = self.transactions[i]
                 h1 = hashlib.sha256((str(t1['sender'])+str(t1['receiver'])+str(t1['amount'])).encode()).hexdigest()
                 h.append(h1)
-            while len(h)>1 :
+            while len(h)>1:
                     if len(h)%2==1:
                         h.append(h[-1])
                     print(h)
@@ -142,7 +160,7 @@ class Blockchain:
                         j = j + 1
                     index_to_delete = i-j
                     del h[-index_to_delete:]
-            print(h)
+                    print(h)
             merkle_root = str(h[0])
         return merkle_root
     
@@ -187,8 +205,8 @@ class Blockchain:
 # Creating a Web App
 app = Flask(__name__)
 host_name = "0.0.0.0"
-localhost = "http://172.31.50.86"
-port_number = 5003
+localhost = "http://172.31.46.191"
+port_number = 5001
 
 # Creating an address for the node on Port 5001
 node_address = str(uuid4()).replace('-', '')
@@ -219,13 +237,18 @@ def get_pair():
 @app.route('/mine_block', methods = ['GET'])
 def mine_block():
     previous_block = blockchain.get_previous_block()
-    previous_proof = int(previous_block['proof'])
-    proof = blockchain.proof_of_work(previous_proof)
-    previous_hash = blockchain.hash(previous_block)
+    if previous_block==0:
+        previous_proof = int(1)
+        proof = blockchain.proof_of_work(previous_proof)
+        previous_hash = '0'
+    else:
+        previous_proof = int(previous_block['proof'])
+        proof = blockchain.proof_of_work(previous_proof)
+        previous_hash = blockchain.hash(previous_block)
     response = {'message': 'Congratulations, you just mined a block!',
                 'transactions' : []
                 }
-    blockchain.update_utxo()
+    #blockchain.update_utxo()
     for i in range(len(blockchain.transactions)):
         r = {}
         r['sender'] = str(blockchain.transactions[i]['sender'])
@@ -233,11 +256,19 @@ def mine_block():
         r['amount'] = str(blockchain.transactions[i]['amount'])
         response['transactions'].append(hashlib.sha256((str(r['sender'])+str(r['receiver'])+str(r['amount'])).encode()).hexdigest())
     block = blockchain.create_block(proof, previous_hash)
+    current_block_hash = blockchain.hash(block)
     response['index'] = block['index']
     response['timestamp'] = block['timestamp']
     response['proof'] = block['proof']
     response['previous_hash'] = block['previous_hash']
     response['merkle_root'] = block['merkle_root']
+    df1 = pd.read_csv('block_data.csv')
+    df2 = pd.read_csv('block_transactions_data.csv')
+    df1.loc[df1.shape[0]]=[response['index'],response['timestamp'],current_block_hash,response['previous_hash'],response['merkle_root']]
+    for i in response['transactions']:
+        df2.loc[df2.shape[0]]=[current_block_hash,i]
+    df1.to_csv('block_data.csv',index = False)
+    df2.to_csv('block_transactions_data.csv',index = False)
     # blockchain.add_transaction(sender = node_address, receiver = 'LV', amount = 1)
     return jsonify(response), 200
 
@@ -277,23 +308,26 @@ def add_transactions():
     print(node)
     df = pd.read_csv('transactions.csv')
     s = []
-    while len(s) < 3: 
-        for i in range(df.shape[0]):
-            for j in range(len(node)):
-                if df.iloc[i]['sender'] == node[j][2]:
-                    #print(d1.iloc[0]['hash_public'])
-                    verifying_key = binascii.unhexlify(str.encode(node[j][1]))
-                    pb = ecdsa.VerifyingKey.from_string(verifying_key, curve=ecdsa.SECP256k1)
-                    #print(binascii.unhexlify(str.encode(d2.iloc[i]['sign'])),binascii.unhexlify(str.encode(d2.iloc[i]['message'])))
-                    if pb.verify(binascii.unhexlify(str.encode(df.iloc[i]['sign'])),binascii.unhexlify(str.encode(df.iloc[i]['message']))):
-                        s.append(str("For Transaction ID " + str(i+1) + " - Signature verified"))
-                        h = hashlib.sha256((str(df.iloc[i]['sender'])+str(df.iloc[i]['receiver'])+str(df.iloc[i]['amount'])).encode()).hexdigest()
-                        blockchain.add_transaction(df.iloc[i]['sender'],df.iloc[i]['receiver'],df.iloc[i]['amount'],h)
-                    else:
-                        s.append(str("For Transaction ID " + str(i+1) + " - Signature not verified"))
+    for i in range(df.shape[0]):
+        for j in range(len(node)):
+            if df.iloc[i]['sender'] == node[j][2] and int(df.iloc[i]['completed']) == 0:
+                #print(d1.iloc[0]['hash_public'])
+                verifying_key = binascii.unhexlify(str.encode(node[j][1]))
+                pb = ecdsa.VerifyingKey.from_string(verifying_key, curve=ecdsa.SECP256k1)
+                #print(binascii.unhexlify(str.encode(d2.iloc[i]['sign'])),binascii.unhexlify(str.encode(d2.iloc[i]['message'])))
+                if pb.verify(binascii.unhexlify(str.encode(df.iloc[i]['sign'])),binascii.unhexlify(str.encode(df.iloc[i]['message']))):
+                    s.append(str("For Transaction ID " + str(i+1) + " - Signature verified"))
+                    h = hashlib.sha256((str(df.iloc[i]['sender'])+str(df.iloc[i]['receiver'])+str(df.iloc[i]['amount'])).encode()).hexdigest()
+                    blockchain.add_transaction(df.iloc[i]['sender'],df.iloc[i]['receiver'],df.iloc[i]['amount'],h)
+                    df.loc[i,'completed'] = 1
+                    df.to_csv('transactions.csv',index=False)
+                else:
+                    s.append(str("For Transaction ID " + str(i+1) + " - Signature not verified"))
+        if len(s)>3:
+            break
     l = len(s)
     response = {'message': f'Number of transaction verified tranactions added to Block after digital signature matching are {l}',
-                'responses': s}    
+                'responses': s}   
     return jsonify(response), 201
 
 # Creating a new transaction
@@ -342,7 +376,7 @@ def connect_node():
     if m_nodes is None:
         return "No Minor node", 400
     for node in m_nodes:
-        if int(node[20:24]) != port_number:
+        if int(node[21:25]) != port_number:
             print(node)
             blockchain.add_node(node,'miner')
     if u_nodes is None or len(u_nodes) < 2:
@@ -350,7 +384,7 @@ def connect_node():
     n = random.randint(2,len(u_nodes))
     for i in range(n):
         x = random.randint(0,len(u_nodes)-1)
-        if int(u_nodes[x][20:24]) != port_number and u_nodes[x] not in blockchain.nodes['user']:
+        if int(u_nodes[x][21:25]) != port_number and u_nodes[x] not in blockchain.nodes['user']:
             blockchain.add_node(u_nodes[x],'user')
     response = {'message': 'All the nodes are now connected. The Blockchain now contains the following nodes:',
                 'total_nodes': blockchain.nodes}

@@ -187,8 +187,8 @@ class Blockchain:
 # Creating a Web App
 app = Flask(__name__)
 host_name = "0.0.0.0"
-localhost = "http://172.31.50.86"
-port_number = 5003
+localhost = "http://192.168.29.19"
+port_number = 5001
 
 # Creating an address for the node on Port 5001
 node_address = str(uuid4()).replace('-', '')
@@ -225,7 +225,7 @@ def mine_block():
     response = {'message': 'Congratulations, you just mined a block!',
                 'transactions' : []
                 }
-    blockchain.update_utxo()
+    #blockchain.update_utxo()
     for i in range(len(blockchain.transactions)):
         r = {}
         r['sender'] = str(blockchain.transactions[i]['sender'])
@@ -277,7 +277,7 @@ def add_transactions():
     print(node)
     df = pd.read_csv('transactions.csv')
     s = []
-    while len(s) < 3: 
+    while len(s) < 2: 
         for i in range(df.shape[0]):
             for j in range(len(node)):
                 if df.iloc[i]['sender'] == node[j][2]:
@@ -342,7 +342,7 @@ def connect_node():
     if m_nodes is None:
         return "No Minor node", 400
     for node in m_nodes:
-        if int(node[20:24]) != port_number:
+        if int(node[21:25]) != port_number:
             print(node)
             blockchain.add_node(node,'miner')
     if u_nodes is None or len(u_nodes) < 2:
@@ -350,7 +350,7 @@ def connect_node():
     n = random.randint(2,len(u_nodes))
     for i in range(n):
         x = random.randint(0,len(u_nodes)-1)
-        if int(u_nodes[x][20:24]) != port_number and u_nodes[x] not in blockchain.nodes['user']:
+        if int(u_nodes[x][21:25]) != port_number and u_nodes[x] not in blockchain.nodes['user']:
             blockchain.add_node(u_nodes[x],'user')
     response = {'message': 'All the nodes are now connected. The Blockchain now contains the following nodes:',
                 'total_nodes': blockchain.nodes}

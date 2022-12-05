@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Created on Fri Sep 30 19:22:42 2022
+Created on Fri Sep 16 17:56:23 2022
 
 @author: jayga
 """
@@ -81,7 +81,7 @@ class User:
 app = Flask(__name__)
 host_name = "0.0.0.0"
 localhost = "http://192.168.29.19"
-port_number = 5011
+port_number = 5016
 
 # Creating user object
 u = User()

@@ -16,7 +16,7 @@ port_number = 6000
 # Creating data for nodes
 @app.route('/create_nodes', methods = ['GET'])
 def create_nodes():
-    localhost = "http://172.31.50.86"
+    localhost = "http://192.168.29.19"
     
     minor_nodes = [
         localhost+":5001/",
